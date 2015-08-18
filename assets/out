@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -e
+# set -x
+
+exec 3>&1 # make stdout available as fd 3 for the result
+exec 1>&2 # redirect all output to stderr for logging
+
+PATH=/usr/local/bin:$PATH
+
+payload=$(mktemp /tmp/payload.XXXXXX)
+response=$(mktemp /tmp/response.XXXXXX)
+
+source=$1
+
+cat > $payload <&0
+
+endpoint=$(jq -r '.source.url' < $payload)
+
+body=$(jq '{"message_type":(.params.type // "INFO"), "entity_id": (.params.entity // null), "state_message": (.params.message // null), "monitoring_tool": (.params.monitoring_tool // "concourse")}' < $payload)
+
+curl -s -H "Content-Type: application/json" -X POST -d "$body" $endpoint > $response
+
+jq -c '{"version":{"ref":"0"},"metadata":[{"name":"result", "value":(.result // "")},{"name":"entity_id", "value":(.entity_id // "")},{"name":"message", "value":(.message // "")}]}' < $response >&3
+
+rm $payload
